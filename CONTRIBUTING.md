@@ -1,31 +1,56 @@
-# Contributing
+# Contributing to Aws Account Operator
+
+Thank you for your interest in contributing! This guide provides comprehensive instructions for setting up your development environment, running tests, and contributing code to this operator.
+
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Pre-commit Hooks with prek](#pre-commit-hooks-with-prek)
+- [Claude Code Integration](#claude-code-integration)
+- [Commit Message Conventions](#commit-message-conventions)
+- [PR Process & Review Requirements](#pr-process--review-requirements)
+- [Validation and Linting](#validation-and-linting)
+- [Testing](#testing)
+- [Boilerplate Framework](#boilerplate-framework)
+- [CI/CD Integration](#cicd-integration)
+
+
+## Code of Conduct
+
+As contributors and maintainers of this project, we are committed to making participation a harassment-free experience for everyone. In short, be excellent to each other.
 
 ## Prerequisites
 
-- **Go 1.22+** — required for building and testing
-- **golangci-lint** — installed automatically via `make lint`
-- **[prek](https://prek.j178.dev/)** — git hook manager that runs validation automatically on commit
+Before contributing, ensure you have the following tools installed:
+
+- **Go 1.22+**: [Installation guide](https://golang.org/doc/install)
+- **golangci-lint**: Used for Go code linting.
+- **[prek](https://prek.j178.dev/)**: Git hook manager that runs validation automatically on commit.
 
 ## Setup
 
 ```bash
+# Install golangci-lint (macOS)
+brew install golangci-lint
+
+# Install golangci-lint (Linux)
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
 # Install prek (macOS)
 brew install prek
 
 # Install prek (Linux)
 curl -fsSL https://prek.j178.dev/install.sh | bash
 
-# Install pre-commit hooks
+# Install pre-commit hooks in this repository
 prek install
 ```
 
-`prek install` sets up pre-commit hooks that automatically run file hygiene checks and golangci-lint before each commit.
+`prek install` sets up git hooks that automatically run file hygiene checks and `golangci-lint` before each commit.
 
-## prek Version
-
-The `.prek-version` file in the repo root pins the prek version used in CI. Periodically check [prek releases](https://github.com/j178/prek/releases) and update `.prek-version` when a new version is available.
-
-## Validation
+## Pre-commit Hooks with prek
 
 The validation runs automatically via pre-commit hooks, or you can run it manually:
 
@@ -33,26 +58,55 @@ The validation runs automatically via pre-commit hooks, or you can run it manual
 # Run all validations (file hygiene + golangci-lint)
 prek run --all-files
 
-# Run linting (olm-deploy-yaml-validate + golangci-lint)
-make lint
-
-# Run only golangci-lint
+# Run only golangci-lint via make
 make go-check
 ```
 
-For CI pipelines, use `hack/ci.sh`.
+## Claude Code Integration
 
-## Linting
+### Stop Hook: prek Validation on Every Turn
 
-This project uses golangci-lint configured via the boilerplate framework:
+If you use **Claude Code**, this repository includes a [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `.claude/settings.json` that runs `prek run --all-files` every time Claude finishes a turn. 
 
-- **Full config**: `boilerplate/openshift/golang-osd-operator/golangci.yml`
-- **Project override**: `.golangci.yml` (minimal - just concurrency: 10)
+If `prek` finds violations (trailing whitespace, linting errors, etc.), the hook **blocks Claude from stopping** and feeds the errors back so Claude can fix them automatically. This shortens the feedback loop and ensures high-quality output without manual intervention.
 
-Enabled linters: errcheck, gosec, govet, ineffassign, misspell, staticcheck, unused
+## Commit Message Conventions
+
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for all commit messages.
+
+### AI Attribution
+
+When using AI assistants (like Claude, Gemini, or GitHub Copilot) to generate or significantly refactor code, you **MUST** include an attribution in the commit message trailer.
+
+Use the `Co-authored-by` trailer format:
+
+```text
+feat(api): add new validation for PagerDutyIntegration
+
+This commit adds a new validating webhook.
+
+Co-authored-by: Claude <claude@anthropic.com>
+```
+
+## PR Process & Review Requirements
+
+### Submission Guidelines
+1. **Branching**: Create a feature branch for your changes.
+2. **Tests**: New features and bug fixes should include appropriate unit or integration tests.
+3. **Docs**: Update relevant documentation if changing user-facing behavior.
+
+### Review Process
+- **CI Passing**: All automated tests in PROW must pass.
+- **Peer Review**: At least one `/lgtm` (Look Good To Me) from a maintainer is required.
+- **Approval**: An `/approve` label from a designated code owner is required for merging.
+- **Merge Bot**: Once approved and CI is green, the OpenShift Merge Bot will automatically merge the PR.
+
+## Validation and Linting
+
+This project uses `golangci-lint` configured via the boilerplate framework.
 
 ```bash
-# Run linting (includes olm-deploy-yaml-validate + golangci-lint)
+# Run full validation (boilerplate + lint)
 make lint
 
 # Run only golangci-lint
@@ -65,60 +119,20 @@ make go-check
 # Run unit tests
 make test
 
-# Run API tests
-make test-apis
-
-# Run all tests (lint + unit + API + integration)
-make test-all
-
-# Run integration tests locally (automated setup, 5/8 tests)
-make test-integration-local
-
-# Run integration tests for CI/PROW (all 8 tests)
-make test-integration
+# Run code coverage
+make coverage
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed integration testing documentation.
-
-## Stop Hook: prek Validation on Every Turn
-
-A Claude Code [stop hook](https://docs.anthropic.com/en/docs/claude-code/hooks) in `.claude/settings.json` runs `prek run --all-files` every time Claude finishes a turn and is about to stop. If prek finds violations (trailing whitespace, invalid JSON/YAML, linting errors, etc.), the hook **blocks Claude from stopping** and feeds the errors back so Claude can fix them automatically.
-
-Without this hook, prek violations would only surface at `git commit` time via the pre-commit hook. The stop hook shortens the feedback loop by catching issues between prompts, allowing longer stretches of autonomous work without human intervention.
-
-The hook script (`.claude/hooks/stop-prek-validation.sh`) includes a guard against infinite loops: if it has already blocked once and Claude retries, it allows the stop to proceed.
 
 ## Boilerplate Framework
 
-This repository uses the [openshift/golang-osd-operator](https://github.com/openshift/boilerplate/tree/master/boilerplate/openshift/golang-osd-operator) convention from [boilerplate](https://github.com/openshift/boilerplate/).
+This repository uses the [openshift/boilerplate](https://github.com/openshift/boilerplate/) framework. 
 
 Key boilerplate targets:
-- `make validate` — Check code generation and boilerplate
-- `make lint` — Static analysis (olm-deploy-yaml-validate + golangci-lint)
-- `make test` — Unit tests
-- `make coverage` — Code coverage analysis
+- `make validate` — Check code generation and boilerplate consistency.
+- `make lint` — Static analysis and YAML validation.
+- `make test` — Run the standard test suite.
 
-See [boilerplate/openshift/golang-osd-operator/README.md](boilerplate/openshift/golang-osd-operator/README.md) for details.
+## CI/CD Integration
 
-## PROW CI
-
-CI is configured via [openshift/release](https://github.com/openshift/release) repository. PROW runs:
-- `make validate` — Code generation checks
-- `hack/ci.sh` — prek validation (file hygiene + golangci-lint)
-- `make lint` — Static analysis
-- `make test` — Unit tests
-- `make coverage` — Code coverage (postsubmit)
-- `make test-integration` — Integration tests (optional, requires AWS)
-
-**Note:** `hack/ci.sh` runs prek validation independently. Future boilerplate versions may integrate prek into `make validate`.
-
-Config: `openshift/release/ci-operator/config/openshift/aws-account-operator/openshift-aws-account-operator-master.yaml`
-
-## Development Workflow
-
-1. Make code changes
-2. Run `make lint` to check locally
-3. Commit (pre-commit hooks run automatically via prek)
-4. If pre-commit hooks fail, fix issues and re-commit
-5. Push to GitHub
-6. PROW CI runs validation, linting, and tests
+The project uses **OpenShift PROW** for continuous integration. Every pull request triggers a set of jobs defined in the `openshift/release` repository that execute `make validate`, `make lint`, and `make test`.
